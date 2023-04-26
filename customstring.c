@@ -12,10 +12,11 @@ int str_length(const char *string)
 	if (string == NULL)
 		return (0);
 
-	while (string[length++] != '\0')
+	while (string[length] != '\0')
 	{
+		length++;
 	}
-	return (--length);
+	return (length);
 }
 
 /**

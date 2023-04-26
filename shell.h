@@ -145,7 +145,7 @@ char *str_duplicate(const char *string);
 
 /* prints*/
 void _puts(char *);
-
+void _memcpy(void *newptr, const void *ptr, unsigned int size);
 /*prints characters*/
 int _putchar(char);
 

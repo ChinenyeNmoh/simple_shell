@@ -7,18 +7,18 @@
  *
  * Return: pointer to destination
  */
-char *_strcpy(char *dest,  char *src)
+char *_strcpy(char *dest, char *src)
 {
-	int i;
+	int i = 0;
 
 	if (dest == src || src == 0)
 		return (dest);
-
-	for (i = 0; src[i] != '\0'; i++)
+	while (src[i])
 	{
 		dest[i] = src[i];
+		i++;
 	}
-	dest[str_length(src)] = '\0';
+	dest[i] = 0;
 	return (dest);
 }
 
@@ -29,24 +29,15 @@ char *_strcpy(char *dest,  char *src)
  */
 char *str_duplicate(const char *string)
 {
-	char *result;
-	int length, i;
+	char *new;
+	size_t len;
 
-	if (string == NULL)
+	len = str_length(string);
+	new = malloc(sizeof(char) * (len + 1));
+	if (new == NULL)
 		return (NULL);
-
-	length = str_length(string) + 1;
-
-	result = malloc(sizeof(char) * length);
-
-	if (result == NULL)
-		return (NULL);
-	for (i = 0; i < length ; i++)
-	{
-		result[i] = string[i];
-	}
-
-	return (result);
+	_memcpy(new, string, len + 1);
+	return (new);
 }
 /**
  * _putchar - prints the character to stdout
@@ -88,3 +79,21 @@ void _puts(char *str)
 		_putchar(str[i]);
 	}
 }
+/**
+ * _memcpy - copies information between void pointers.
+ * @newptr: destination pointer.
+ * @ptr: source pointer.
+ * @size: size of the new pointer.
+ *
+ * Return: no return.
+ */
+void _memcpy(void *newptr, const void *ptr, unsigned int size)
+{
+	char *char_ptr = (char *)ptr;
+	char *char_newptr = (char *)newptr;
+	unsigned int i;
+
+	for (i = 0; i < size; i++)
+		char_newptr[i] = char_ptr[i];
+}
+
