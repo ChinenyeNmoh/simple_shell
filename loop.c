@@ -1,167 +1,122 @@
 #include "shell.h"
-/**
- * hsh - main shell loop
- * @info: the parameter & return info struct
- * @av: the argument vector
- *
- * Return: 0 on success, 1 on error, or error code
- */
-int hsh(info_t *info, char **av)
-{
-	ssize_t t = 0;
-	int builtinret = 0;
 
-	while (t != -1 && builtinret != -2)
-	{
-		clear_info(info);
-		if (interactive(info))
-			_puts("$ ");
-		_eputchar(BUF_FLUSH);
-		t = get_input(info);
-		if (t != -1)
-		{
-			set_info(info, av);
-			builtinret = find_builtin(info);
-			if (builtinret == -1)
-				find_cmd(info);
-		}
-		else if (interactive(info))
-			_putchar('\n');
-		free_info(info, 0);
-	}
-	write_history(info);
-	free_info(info, 1);
-	if (!interactive(info) && info->status)
-		exit(info->status);
-	if (builtinret == -2)
-	{
-		if (info->err_num == -1)
-			exit(info->status);
-		exit(info->err_num);
-	}
-	return (builtinret);
-}
 /**
- * fork_cmd - forks a process
- * @info: the parameter & return info struct
+ * without_comment - deletes comments from the input
  *
- * Return: nothing
+ * @in: input string
+ * Return: input without comments
  */
-void fork_cmd(info_t *info)
+char *without_comment(char *in)
 {
-	pid_t child;
+	int j, up_to;
 
-	child = fork();
-	if (child == -1)
+	up_to = 0;
+	for (j = 0; in[j]; j++)
 	{
-		perror("Error:");
-		return;
-	}
-	if (child == 0)
-	{
-		if (execve(info->path, info->argv, get_environ(info)) == -1)
+		if (in[j] == '#')
 		{
-			free_info(info, 1);
-			if (errno == EACCES)
-				exit(126);
-			exit(1);
+			if (j == 0)
+			{
+				free(in);
+				return (NULL);
+			}
+
+			if (in[j - 1] == ' ' || in[j - 1] == '\t' || in[j - 1] == ';')
+				up_to = j;
 		}
 	}
-	else
+
+	if (up_to != 0)
 	{
-		wait(&(info->status));
-		if (WIFEXITED(info->status))
-		{
-			info->status = WEXITSTATUS(info->status);
-			if (info->status == 126)
-				print_error(info, "Permission denied\n");
-		}
+		in = _realloc(in, j, up_to + 1);
+		in[up_to] = '\0';
 	}
+
+	return (in);
 }
 
 /**
- * find_cmd - finds a command
- * @info: the parameter & return info struct
+ * shell_loop - Loop of shell
+ * @datash: data relevant (av, input, args)
  *
- * Return: nothing
+ * Return: no return.
  */
-void find_cmd(info_t *info)
+void shell_loop(data_shell *datash)
 {
-	char *path = NULL;
-	int i = 0, j = 0;
+	int l, i_eof;
+	char *enter;
 
-	info->path = info->argv[0];
-	if (info->linecount_flag == 1)
+	l = 1;
+	while (l == 1)
 	{
-		info->line_count++;
-		info->linecount_flag = 0;
-	}
-	while (info->arg[i])
-	{
-		if (!is_delim(info->arg[i], " \t\n"))
+		write(STDIN_FILENO, "^-^ ", 4);
+		enter = read_line(&i_eof);
+		if (i_eof != -1)
 		{
-			j++;
+			enter = without_comment(enter);
+			if (enter == NULL)
+				continue;
+
+			if (check_syntax_error(datash, enter) == 1)
+			{
+				datash->status = 2;
+				free(enter);
+				continue;
+			}
+			enter = rep_var(enter, datash);
+			l = split_commands(datash, enter);
+			datash->counter += 1;
+			free(enter);
 		}
-		i++;
-	}
-	if (!j)
-	{
-		return;
-	}
-	path = find_path(info, _getenv(info, "PATH="), info->argv[0]);
-	if (path)
-	{
-		info->path = path;
-		fork_cmd(info);
-	}
-	else
-	{
-		if ((interactive(info) || _getenv(info, "PATH=")
-			|| info->argv[0][0] == '/') && is_cmd(info, info->argv[0]))
+		else
 		{
-			fork_cmd(info);
-		}
-		else if (*(info->arg) != '\n')
-		{
-			info->status = 127;
-			print_error(info, "not found\n");
+			l = 0;
+			free(enter);
 		}
 	}
 }
-
 /**
- * find_builtin - finds a builtin command
- * @info: the parameter & return info struct
+ * cmp_env_name - compares env variables names
+ * with the name passed.
+ * @nenv: name of the environment variable
+ * @name: name passed
  *
- * Return: -1 if builtin not found,
- *			0 if builtin executed successfully,
- *			1 if builtin found but not successful,
- *			-2 if builtin signals exit()
+ * Return: 0 if are not equal. Another value if they are.
  */
-int find_builtin(info_t *info)
+int cmp_env_name(const char *nenv, const char *name)
 {
-	int i = 0, built_in = -1;
-	builtin_table builtintbl[] = {
-		{"exit", _myexit},
-		{"env", _mygetenv},
-		{"help", _myhelp},
-		{"history", _myhistory},
-		{"setenv", _mysetenv},
-		{"unsetenv", _myunsetenv},
-		{"cd", _mycd},
-		{"alias", _myalias},
-		{NULL, NULL}
-	};
+	int i;
 
-	while (builtintbl[i].type != NULL)
+	for (i = 0; nenv[i] != '='; i++)
 	{
-		if (_strcmp(info->argv[0], builtintbl[i].type) == 0)
+		if (nenv[i] != name[i])
 		{
-			info->line_count++;
-			built_in = builtintbl[i].func(info);
-			break;
+			return (0);
 		}
-		i++;
 	}
-	return (built_in);
+	return (i + 1);
+}
+/**
+ * copy_info - copies info to create
+ * a new env or alias
+ * @name: name (env or alias)
+ * @value: value (env or alias)
+ *
+ * Return: new env or alias.
+ */
+char *copy_info(char *name, char *value)
+{
+	char *rec;
+	int len_name, len_value, lent;
+
+	len_name = _strlen(name);
+	len_value = _strlen(value);
+	lent = len_name + len_value + 2;
+	rec = malloc(sizeof(char) * (lent));
+	_strcpy(rec, name);
+	_strcat(rec, "=");
+	_strcat(rec, value);
+	_strcat(rec, "\0");
+
+	return (rec);
 }
